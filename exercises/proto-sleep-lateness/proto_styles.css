@@ -1,0 +1,8 @@
+:root{ --fg:#111; --muted:#666; }
+*{ box-sizing:border-box }
+html,body{ margin:0; padding:0; background:#fff; color:var(--fg); font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif; line-height:1.45 }
+main{ max-width:900px; margin:28px auto; padding:0 16px }
+h1{ font-size:20px; margin:0 0 8px }
+.note{ color:var(--muted); margin:0 0 16px }
+.axis-label{ font-size:12px; fill:#222 }
+.tick text{ font-size:12px }
