@@ -1,0 +1,16 @@
+/* Minimal, clean styles */
+:root{
+  --fg:#111;
+  --muted:#666;
+  --axis:#222;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:#fff;color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;line-height:1.4}
+main{max-width:980px;margin:28px auto;padding:0 16px}
+h1{font-size:20px;margin:0 0 8px 0}
+.note{color:var(--muted);margin:0 0 16px 0}
+.axis-label{font-size:12px;fill:var(--axis)}
+.tick text{font-size:12px}
+.annotation{font-size:12px;fill:var(--fg)}
+.legend{font-size:12px;fill:var(--fg)}
+.badge{display:inline-block;background:#f2f2f2;border-radius:12px;padding:2px 8px;margin-left:8px;font-size:12px;color:#333}
