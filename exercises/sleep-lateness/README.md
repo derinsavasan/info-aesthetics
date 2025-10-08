@@ -1,17 +1,11 @@
-# Sleep vs Minutes Late (D3 Scatterplot)
+# Senior Year at Georgetown: Hours Slept vs. Minutes Late to First Class
 
-**What this shows:** your hours of sleep (x) vs minutes late to first class (y). Includes a shaded **Nap Zone (<3h)** and an optional **quadratic trendline** to capture the U-shape you observed.
+A visual diary of my senior-year mornings, courtesy of my Oura ring and bad decisions.
+- One dot = one **weekday** from late August to early May (excludes major holidays and weekends)
+- X = Hours of Sleep (night before)
+- Y = Minutes Late to First Class
+- Nap zone (<3h) shaded: a gamble that usually behaves like a "nap" (too short for deep sleep >> easier to snap out of >> allows me to be on time)
 
-## Files
-- `index.html` – loads D3 and the chart
-- `styles.css` – minimal styling
-- `scatter.js` – chart logic; loads `data.csv`
-- `data.csv` – edit with your real logs (`sleep,late`)
-
-## How to run (VS Code Live Server)
-1. Open this folder in VS Code.
-2. Install the **Live Server** extension (Ritwick Dey).
-3. Right‑click `index.html` → **Open with Live Server**.
-4. Edit `data.csv` and save – the chart reloads automatically.
-
-> If you double‑click `index.html` (file://), the CSV may not load due to browser security. Use Live Server or any local web server.
+Tooltips show exact date and values
+- Challange: Find my birthday
+- Clue: it's an outlier

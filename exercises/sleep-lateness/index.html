@@ -3,15 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Sleep vs Minutes Late (Scatter)</title>
+  <title>Senior Year at Georgetown: Hours Slept vs. Minutes Late to First Class</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
   <main>
-    <h1>Sleep vs Minutes Late to First Class</h1>
-    <p class="note">Edit <code>data.csv</code> with your real logs. Open this folder with a local server (e.g., VS Code Live Server) so the CSV loads.</p>
-    <svg id="chart" width="800" height="520" aria-label="Scatterplot of hours slept vs minutes late"></svg>
+    <h1>Senior Year at Georgetown: Hours Slept vs. Minutes Late to First Class</h1>
+    <p class="note">
+      One dot per weekday from late Aug 2023 to early May 2024 (excludes weekends, Thanksgiving, Winter Break, and Spring Break)<br><br>
+      X: Hours of Sleep (night before)<br>
+      Y: Minutes Late to First Class
+    </p>
+    <div id="tooltip" class="tooltip" style="opacity:0;"></div>
+    <svg id="chart" width="900" height="560" aria-label="Scatterplot of hours slept vs. minutes late"></svg>
   </main>
   <script src="scatter.js"></script>
 </body>
