@@ -1,7 +1,7 @@
 // Load the Frankenstein text file
 // Source: Project Gutenberg - https://www.gutenberg.org/ebooks/84
 // Mary Shelley, Frankenstein; Or, The Modern Prometheus (1818)
-const data = await d3.text('/frankenstein.txt')
+const data = await d3.text('./frankenstein.txt')
 
 // https://winkjs.org/
 import winkSentiment from 'wink-sentiment'
