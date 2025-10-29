@@ -38,10 +38,14 @@ const toNumber = x => {
 };
 const formatValue = v => {
   if (!isFinite(v) || v <= 0) return "0";
-  if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
-  if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
-  if (v >= 1e3) return (v / 1e3).toFixed(2) + "K";
-  return String(Math.round(v));
+  let divisor, suffix;
+  if (v >= 1e9) { divisor = 1e9; suffix = "B"; }
+  else if (v >= 1e6) { divisor = 1e6; suffix = "M"; }
+  else if (v >= 1e3) { divisor = 1e3; suffix = "K"; }
+  else return String(Math.round(v));
+  let str = (v / divisor).toFixed(2);
+  str = str.replace(/(\.\d*?)0+$/, '$1');
+  return str + suffix;
 };
 const pluralize = word => {
   if (!word) return '';
@@ -145,7 +149,14 @@ async function init() {
   const aggMap = aggregateLeafTuples(expandedRows);
   const sequences = tuplesToSequences(aggMap);
   const root = buildHierarchy(sequences);
-  d3.select("#filteredTotal").text(`Total data: ${formatValue(d3.sum(expandedRows, r => r.Value))}`);
+  const totalValue = d3.sum(expandedRows, r => r.Value);
+  let totalText;
+  if (VALUE_MODE === 'hours') {
+    totalText = `Total data: ${formatValue(totalValue).replace('B', ' billion')} hours`;
+  } else {
+    totalText = `Total data: ${formatValue(totalValue).replace('B', ' billion')} streams`;
+  }
+  d3.select("#filteredTotal").text(totalText);
   renderSunburst(root);
   window.__netflixSunburstRoot = root;
 }
@@ -168,18 +179,14 @@ function setupControls() {
 }
 
 // Rendering
-function renderSunburst(data) {
-  const container = d3.select("#chart");
-  container.selectAll("*").remove();
-  const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
-  const radius = size / 2;
-  const svg = container.append("svg").style("display", "block").style("margin", "auto")
-    .append("g").attr("transform", `translate(${size/2},${size/2})`);
+// Rendering Helpers
+function createPartitionAndRoot(data, radius) {
+  const partition = d3.partition().size([2 * Math.PI, radius * radius]);
+  const root = partition(d3.hierarchy(data).sum(d => d.value).sort((a, b) => b.value - a.value));
+  return root;
+}
 
-  const partition = data => d3.partition().size([2 * Math.PI, radius * radius])(d3.hierarchy(data).sum(d => d.value).sort((a, b) => b.value - a.value));
-  const root = partition(data);
-
-  // Color Scales
+function setupColorScales(root) {
   typeScale = d3.scaleOrdinal().domain(["Movie", "TV"]).range(["#E50914", "#B81D24"]);
   genreScale = d3.scaleOrdinal(["#DC143C", "#CD5C5C", "#F08080", "#FA8072", "#E9967A", "#FFB6C1", "#FFC0CB", "#FF7F50"]);
   languageScale = d3.scaleOrdinal(["#800000", "#8B0000", "#A0522D", "#A52A2A", "#C71585", "#FF0000", "#FF6347", "#FF4500", "#FF1493", "#8B4513", "#A0522D", "#B22222"]);
@@ -192,28 +199,41 @@ function renderSunburst(data) {
     }
   });
   genreScale.domain(Array.from(genres).sort());
+}
 
-  // Arcs
+function createArcs(radius) {
   const minArcWidth = 2;
   const arc = d3.arc().startAngle(d => d.x0).endAngle(d => d.x1).padAngle(1 / radius).padRadius(radius)
     .innerRadius(d => Math.sqrt(d.y0)).outerRadius(d => Math.max(Math.sqrt(d.y0) + minArcWidth, Math.sqrt(d.y1) - 1));
   const mousearc = d3.arc().startAngle(d => d.x0).endAngle(d => d.x1).innerRadius(d => Math.sqrt(d.y0)).outerRadius(radius);
+  return { arc, mousearc };
+}
 
-  // Center Label
+function setupCenterLabel(svg) {
   const centerLabel = svg.append("g").attr("class", "center-label");
   centerLabel.append("text").attr("class", "center-pct").attr("text-anchor", "middle").attr("y", -8).attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif").text("");
   centerLabel.append("text").attr("class", "center-desc").attr("text-anchor", "middle").attr("y", 20).attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif").text("");
+  return centerLabel;
+}
 
-  const tooltip = d3.select("#tooltip");
-  const breadcrumb = d3.select("#breadcrumb");
+function setupTooltip() {
+  return d3.select("#tooltip");
+}
 
-  // Nodes
+function setupBreadcrumb() {
+  return d3.select("#breadcrumb");
+}
+
+function renderNodes(svg, root, arc, mousearc) {
   const nodes = svg.append("g").selectAll("path").data(root.descendants().filter(d => d.depth)).join("path")
     .attr("fill", d => colorForNode(d)).attr("fill-opacity", 1.0).attr("d", arc);
+  const mouseLayer = svg.append("g").selectAll("path").data(root.descendants().filter(d => d.depth)).join("path")
+    .attr("fill", "none").attr("pointer-events", "all").attr("d", mousearc);
+  return { nodes, mouseLayer };
+}
 
-  // Mouse Layer
-  svg.append("g").selectAll("path").data(root.descendants().filter(d => d.depth)).join("path")
-    .attr("fill", "none").attr("pointer-events", "all").attr("d", mousearc)
+function setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcrumb, VALUE_MODE) {
+  mouseLayer
     .on("mouseenter", function(event, d) {
       nodes.attr("fill-opacity", n => d.ancestors().includes(n) ? 1.0 : 0.3);
       d3.select("#title-overlay").style("opacity", 0);
@@ -223,14 +243,15 @@ function renderSunburst(data) {
       const descEl = centerLabel.select('.center-desc');
       descEl.selectAll('tspan').remove();
       descEl.text("");
-      const parts = desc.split(' went to ');
+      const splitPhrase = VALUE_MODE === 'hours' ? ' went to ' : ' came from ';
+      const parts = desc.split(splitPhrase);
       if (parts.length > 1) {
-        descEl.append('tspan').text(parts[0] + ' went to').attr('x', 0).attr('dy', 0);
+        descEl.append('tspan').text(parts[0] + splitPhrase).attr('x', 0).attr('dy', 0);
         descEl.append('tspan').text(parts[1]).attr('x', 0).attr('dy', '1.2em');
       } else {
         descEl.text(desc);
       }
-      updateBreadcrumb(d);
+      updateBreadcrumb(d, breadcrumb, root);
       const valueLabel = VALUE_MODE === "hours" ? "Watch Time" : "View Count";
       let left = event.pageX + 5, top = event.pageY + 5;
       tooltip.classed("show", true).style("left", `${left}px`).style("top", `${top}px`).html(`${valueLabel}: ${formatValue(d.value)}`);
@@ -261,26 +282,43 @@ function renderSunburst(data) {
       breadcrumb.html("");
       tooltip.classed("show", false);
     });
+}
 
+function updateBreadcrumb(d, breadcrumb, root) {
+  const sequence = d.ancestors().reverse().slice(1).filter(n => n.data.name !== 'end').map(n => n.data.name);
+  const percentage = (100 * d.value / root.value).toFixed(1);
+  breadcrumb.selectAll("*").remove();
+  const svgBread = breadcrumb.append("svg").attr("width", 800).attr("height", 40);
+  let xOffset = 0;
+  sequence.forEach((step, i) => {
+    const displayStep = step === 'sci-fi' ? 'Sci-Fi' : step;
+    const textContent = i === sequence.length - 1 ? `${displayStep} (${percentage}%)` : displayStep;
+    const width = textContent.length * 6 + 20, height = 30;
+    const points = [[xOffset, 0], [xOffset + width - 10, 0], [xOffset + width, height / 2], [xOffset + width - 10, height], [xOffset, height]];
+    let fillColor = i === 0 ? typeScale(step) : i === 1 ? genreScale(step) : languageScale(step);
+    svgBread.append("polygon").attr("points", points.map(p => p.join(",")).join(" ")).attr("fill", fillColor).attr("stroke", "#fff").attr("stroke-width", 1);
+    svgBread.append("text").attr("x", xOffset + width / 2).attr("y", height / 2 + 5).attr("text-anchor", "middle").attr("fill", "#fff").attr("font-size", 12).text(textContent);
+    xOffset += width - 5;
+  });
+}
+
+function renderSunburst(data) {
+  const container = d3.select("#chart");
+  container.selectAll("*").remove();
+  const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+  const radius = size / 2;
+  const svg = container.append("svg").style("display", "block").style("margin", "auto")
+    .append("g").attr("transform", `translate(${size/2},${size/2})`);
+
+  const root = createPartitionAndRoot(data, radius);
+  setupColorScales(root);
+  const { arc, mousearc } = createArcs(radius);
+  const centerLabel = setupCenterLabel(svg);
+  const tooltip = setupTooltip();
+  const breadcrumb = setupBreadcrumb();
+  const { nodes, mouseLayer } = renderNodes(svg, root, arc, mousearc);
+  setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcrumb, VALUE_MODE);
   centerLabel.raise();
-
-  function updateBreadcrumb(d) {
-    const sequence = d.ancestors().reverse().slice(1).filter(n => n.data.name !== 'end').map(n => n.data.name);
-    const percentage = (100 * d.value / root.value).toFixed(1);
-    breadcrumb.selectAll("*").remove();
-    const svgBread = breadcrumb.append("svg").attr("width", 800).attr("height", 40);
-    let xOffset = 0;
-    sequence.forEach((step, i) => {
-      const displayStep = step === 'sci-fi' ? 'Sci-Fi' : step;
-      const textContent = i === sequence.length - 1 ? `${displayStep} (${percentage}%)` : displayStep;
-      const width = textContent.length * 6 + 20, height = 30;
-      const points = [[xOffset, 0], [xOffset + width - 10, 0], [xOffset + width, height / 2], [xOffset + width - 10, height], [xOffset, height]];
-      let fillColor = i === 0 ? typeScale(step) : i === 1 ? genreScale(step) : languageScale(step);
-      svgBread.append("polygon").attr("points", points.map(p => p.join(",")).join(" ")).attr("fill", fillColor).attr("stroke", "#fff").attr("stroke-width", 1);
-      svgBread.append("text").attr("x", xOffset + width / 2).attr("y", height / 2 + 5).attr("text-anchor", "middle").attr("fill", "#fff").attr("font-size", 12).text(textContent);
-      xOffset += width - 5;
-    });
-  }
 }
 
 // Helpers
@@ -344,6 +382,3 @@ if (typeof d3 !== 'undefined') {
   init();
   setupControls();
 }
-
-
-
