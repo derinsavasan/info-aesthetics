@@ -1,0 +1,168 @@
+#filter-explanation {
+  font-size:15px;
+  font-weight:400;
+  margin-top:10px;
+  max-width:340px;
+  line-height:1.5;
+  color:#444;
+  text-align: right;
+  margin-left: auto;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  width: 100vw;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: #fff;
+  color: #333;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+#chart {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#chart svg {
+  width: 90vmin;
+  height: 90vmin;
+}
+
+#title-overlay {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: #212529;
+  pointer-events: none;
+  z-index: 30;
+  max-width: 360px;
+  line-height: 1.3;
+}
+
+#controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 20;
+}
+
+#controls div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+#controls label {
+  font-size: 14px;
+  color: #495057;
+  cursor: pointer;
+}
+
+#controls input[type="radio"] {
+  accent-color: #007bff;
+}
+
+
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.legend-item:last-child {
+  margin-bottom: 0;
+}
+
+.legend-item div {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  margin-right: 8px;
+  border: 1px solid #ccc;
+}
+
+.legend-item span {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+}
+
+.breadcrumb {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  z-index: 20;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+}
+
+.breadcrumb svg {
+  overflow: visible;
+}
+
+#filteredTotal {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 14px;
+  color: #666;
+  z-index: 20;
+}
+
+.tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tooltip.show {
+  opacity: 1;
+}
+
+.center-label .center-pct {
+  font-size: 6vmin;
+  font-weight: bold;
+  fill: #212529;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.center-label .center-desc {
+  font-size: 2vmin;
+  font-weight: normal;
+  fill: #444;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}

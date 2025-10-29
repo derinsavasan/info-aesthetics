@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Netflix Viewing Atlas</title>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+  <div id="chart"></div>
+  <div id="title-overlay">
+    <div style="font-size:24px;font-weight:600;line-height:1.2;">Netflix Viewing Atlas</div>
+    <div id="subtitle-overlay" style="font-size:15px;font-weight:400;margin-top:8px;max-width:340px;line-height:1.5;color:#444;">
+      This project visualizes six months of Netflix viewing data from January to October 2025. Each layer moves from format to genre to language, scaled by hours watched and number of streams.
+    </div>
+  </div>
+  <div id="controls">
+    <div>
+      <label>
+    <input type="radio" name="valueMode" value="hours" checked> Watch Time
+      </label>
+      <label>
+    <input type="radio" name="valueMode" value="views"> View Count
+      </label>
+    </div>
+    <div id="filter-explanation" style="font-size:15px;font-weight:400;margin-top:10px;max-width:340px;line-height:1.5;color:#444;">
+    <b>Watch Time</b><br>
+    Measures the total amount of time viewers spent watching a title. Calculated in total hours viewed across all viewers.<br><br>
+    <b>View Count</b><br>
+    Counts how many times a title was started. Each press of “play” counts as one view, no matter how long someone watched it for.<br><br>
+  Use the toggle to switch between what people committed time to and what they were curious enough to try.
+    </div>
+  </div>
+  <div class="breadcrumb" id="breadcrumb"></div>
+  <div id="filteredTotal"></div>
+  <div class="tooltip" id="tooltip"></div>
+  <script src="script.js"></script>
+</body>
+</html>
