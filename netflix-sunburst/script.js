@@ -148,7 +148,7 @@ function pruneEmptyBranches(node) {
 
 // Keyword Analysis
 function analyzeTitleKeywords(rows) {
-  const keywordsByTypeGenre = new Map(); // "Type|Genre" → Map(word → {count, hours})
+  const keywordsByTypeGenreLang = new Map(); // "Type|Genre|Language" → Map(word → {count, hours})
   const stopWords = ['the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'is', 'are', 'was', 'were', 'be', 'been', 'has', 'have', 'had', 'with', 'from', 'by', 'this', 'that', 'will', 'who', 'what', 'when', 'where', 'how', 'their', 'into', 'out', 'about', 'after', 'his', 'her', 'she', 'they', 'them', 'series', 'movie', 'season', 'limited', 'some', 'life', 'world', 'every', 'story', 'while', 'being'];
   
   // Build a set of all title words to exclude from keyword analysis
@@ -164,7 +164,9 @@ function analyzeTitleKeywords(rows) {
   });
   
   rows.forEach(row => {
-    const key = `${row.Type}|${row.PrimaryGenre}`; // Separate by type and genre
+    // Create keys for both Type|Genre and Type|Genre|Language levels
+    const genreKey = `${row.Type}|${row.PrimaryGenre}`;
+    const langKey = row.Language ? `${row.Type}|${row.PrimaryGenre}|${row.Language}` : null;
     
     // Only use summary for TV shows (movies don't have meaningful summaries)
     let text = '';
@@ -181,29 +183,41 @@ function analyzeTitleKeywords(rows) {
       .map(w => w.replace(/[^\w]/g, ''))
       .filter(w => w.length > 3 && !stopWords.includes(w) && /^[a-z]+$/.test(w) && !titleWords.has(w));
     
-    if (!keywordsByTypeGenre.has(key)) {
-      keywordsByTypeGenre.set(key, new Map());
-    }
-    
-    const keywords = keywordsByTypeGenre.get(key);
-    words.forEach(word => {
-      const data = keywords.get(word) || { count: 0, totalHours: 0 };
-      data.count++;
-      data.totalHours += row.Value;
-      keywords.set(word, data);
+    // Store keywords at both genre and language levels
+    [genreKey, langKey].forEach(key => {
+      if (!key) return;
+      
+      if (!keywordsByTypeGenreLang.has(key)) {
+        keywordsByTypeGenreLang.set(key, new Map());
+      }
+      
+      const keywords = keywordsByTypeGenreLang.get(key);
+      words.forEach(word => {
+        const data = keywords.get(word) || { count: 0, totalHours: 0 };
+        data.count++;
+        data.totalHours += row.Value;
+        keywords.set(word, data);
+      });
     });
   });
   
-  return keywordsByTypeGenre;
+  return keywordsByTypeGenreLang;
 }
 
 function getTopKeywords(node, keywordData, limit = 3) {
   if (!keywordData || (node.depth !== 2 && node.depth !== 3)) return null;
   
-  // Extract type and genre based on depth
+  // Extract type, genre, and language based on depth
   const type = node.depth === 2 ? node.parent.data.name : node.parent.parent.data.name;
   const genre = node.depth === 2 ? node.data.name : node.parent.data.name;
-  const key = `${type}|${genre}`;
+  const language = node.depth === 3 ? node.data.name : null;
+  
+  // Try language-specific key first (for depth 3), then fall back to genre key
+  const langKey = language ? `${type}|${genre}|${language}` : null;
+  const genreKey = `${type}|${genre}`;
+  
+  // Use language-specific keywords if available, otherwise use genre-level
+  const key = (langKey && keywordData.has(langKey)) ? langKey : genreKey;
   
   if (!keywordData.has(key)) return null;
   
