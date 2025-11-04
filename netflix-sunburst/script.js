@@ -65,7 +65,7 @@ const pluralize = word => {
   if (word.endsWith('s')) return word + 'es';
   return word + 's';
 };
-const formatType = word => word.toLowerCase() === 'tv' ? 'TV' : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+const formatType = word => word.toLowerCase() === 'tv' ? 'TV' : word.toLowerCase();
 
 // Data Processing
 function normalizeRow(row, type) {
@@ -149,27 +149,37 @@ function pruneEmptyBranches(node) {
 // Keyword Analysis
 function analyzeTitleKeywords(rows) {
   const keywordsByTypeGenre = new Map(); // "Type|Genre" → Map(word → {count, hours})
-  const stopWords = ['the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'is', 'are', 'was', 'were', 'be', 'been', 'has', 'have', 'had', 'with', 'from', 'by', 'this', 'that', 'will', 'who', 'what', 'when', 'where', 'how', 'their', 'into', 'out', 'about', 'after', 'his', 'her', 'she', 'they', 'them', 'series', 'movie', 'season', 'limited'];
+  const stopWords = ['the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'is', 'are', 'was', 'were', 'be', 'been', 'has', 'have', 'had', 'with', 'from', 'by', 'this', 'that', 'will', 'who', 'what', 'when', 'where', 'how', 'their', 'into', 'out', 'about', 'after', 'his', 'her', 'she', 'they', 'them', 'series', 'movie', 'season', 'limited', 'some', 'life', 'world', 'every', 'story', 'while', 'being'];
+  
+  // Build a set of all title words to exclude from keyword analysis
+  const titleWords = new Set();
+  rows.forEach(row => {
+    if (row.Title) {
+      const words = row.Title.toLowerCase()
+        .split(/[\s\-:.,;!?'"()\[\]]+/)
+        .map(w => w.replace(/[^\w]/g, ''))
+        .filter(w => w.length > 3 && /^[a-z]+$/.test(w));
+      words.forEach(w => titleWords.add(w));
+    }
+  });
   
   rows.forEach(row => {
     const key = `${row.Type}|${row.PrimaryGenre}`; // Separate by type and genre
     
-    // Use summary for TV shows, title for movies
+    // Only use summary for TV shows (movies don't have meaningful summaries)
     let text = '';
     if (row.Type === 'TV' && row.Summary) {
       // Remove HTML tags from summary
       text = row.Summary.replace(/<[^>]*>/g, ' ').toLowerCase();
-    } else if (row.Type === 'Movie' && row.Title) {
-      text = row.Title.toLowerCase();
     }
     
     if (!text) return;
     
-    // Split and filter words
+    // Split and filter words (exclude stop words and title words)
     const words = text
       .split(/[\s\-:.,;!?'"()\[\]]+/)
       .map(w => w.replace(/[^\w]/g, ''))
-      .filter(w => w.length > 3 && !stopWords.includes(w));
+      .filter(w => w.length > 3 && !stopWords.includes(w) && /^[a-z]+$/.test(w) && !titleWords.has(w));
     
     if (!keywordsByTypeGenre.has(key)) {
       keywordsByTypeGenre.set(key, new Map());
@@ -197,8 +207,12 @@ function getTopKeywords(node, keywordData, limit = 3) {
   
   if (!keywordData.has(key)) return null;
   
+  // Filter out the genre name itself from keywords
+  const genreLower = genre.toLowerCase();
+  
   return Array.from(keywordData.get(key).entries())
     .map(([word, data]) => ({ word, ...data }))
+    .filter(k => k.word !== genreLower) // Exclude genre name
     .sort((a, b) => b.totalHours - a.totalHours)
     .slice(0, limit)
     .map(k => k.word);
@@ -418,7 +432,7 @@ function updateBreadcrumb(d, breadcrumb, root) {
   
   let xOffset = 0;
   sequence.forEach((step, i) => {
-    const displayStep = step === 'sci-fi' ? 'Sci-Fi' : step;
+    const displayStep = step; // Keep genres lowercase
     const textContent = i === sequence.length - 1 ? `${displayStep} (${percentage}%)` : displayStep;
     
     // Width calculation and height
@@ -484,7 +498,7 @@ function formatChildrenCategory(type, language = null) {
   if (formattedType === 'TV') {
     return language ? `${language} children's TV` : "children's TV";
   }
-  if (formattedType === 'Movie') {
+  if (formattedType === 'movie') {
     return language ? `${language} children's movies` : "children's movies";
   }
   return null; // Not TV or Movie, handle elsewhere
@@ -512,31 +526,28 @@ function formatCenterDesc(d, root, VALUE_MODE) {
   // Type + Genre + Language
   else if (type && genre && language) {
     cat = fmt === 'TV' ? buildCat(language, 'TV', pluralize(genreLower)) :
-          fmt === 'Movie' ? buildCat(language, genreLower, 'movies') :
+          fmt === 'movie' ? buildCat(language, genreLower, 'movies') :
           buildCat(language, genreLower, pluralize(fmt));
   }
   // Type + Genre (no language)
   else if (type && genre) {
     cat = fmt === 'TV' ? buildCat(null, 'TV', pluralize(genreLower)) :
-          fmt === 'Movie' ? buildCat(null, genreLower, 'movies') :
+          fmt === 'movie' ? buildCat(null, genreLower, 'movies') :
           buildCat(null, genreLower, pluralize(fmt));
   }
   // Type + Language (no genre)
   else if (type && language) {
     cat = fmt === 'TV' ? `${language} TV shows` :
-          fmt === 'Movie' ? `${language} movies` :
+          fmt === 'movie' ? `${language} movies` :
           `${language} ${pluralize(fmt)}`;
   }
   // Only type, genre, or language
-  else if (type) cat = fmt === 'TV' ? 'TV shows' : fmt === 'Movie' ? 'movies' : pluralize(fmt);
+  else if (type) cat = fmt === 'TV' ? 'TV shows' : fmt === 'movie' ? 'movies' : pluralize(fmt);
   else if (genre) cat = pluralize(genreLower);
   else if (language) cat = `${language} titles`;
   
-  // Capitalize first letter if needed
-  const result = cat.charAt(0) === cat.charAt(0).toLowerCase() ? 
-    cat.charAt(0).toUpperCase() + cat.slice(1) : cat;
-  
-  return phrase + result + '.';
+  // Don't capitalize - keep genres lowercase
+  return phrase + cat + '.';
 }
 
 function formatTotalLine(root, VALUE_MODE) {
