@@ -24,10 +24,17 @@ const CONFIG = {
   ]
 };
 
+// Constants
+const CHART_SIZE_RATIO = 0.9; // Chart takes up 90% of viewport
+const LINE_SPACING = '1.2em'; // Spacing between lines in center label
+const RESIZE_DEBOUNCE_MS = 250; // Delay before re-rendering on window resize
+const MIN_ARC_WIDTH = 2; // Minimum width of sunburst arcs
+
 // Global State
 let VALUE_MODE = CONFIG.VALUE_MODE;
 let SPLIT_MULTI_GENRES = CONFIG.SPLIT_MULTI_GENRES;
 let typeScale, genreScale, languageScale;
+let keywordData = null; // Store keyword analysis results
 
 // Utility Functions
 const cleanGenre = g => g.replace(/[().,;!?']/g, '').trim();
@@ -53,6 +60,7 @@ const pluralize = word => {
   if (word.toLowerCase() === 'tv') return 'TV shows';
   if (word.toLowerCase() === 'sci-fi') return 'sci-fi';
   if (word.toLowerCase() === 'espionage') return 'espionage';
+  if (word.toLowerCase() === 'children') return 'children';
   if (word.endsWith('y') && !/[aeiou]y$/i.test(word)) return word.slice(0, -1) + 'ies';
   if (word.endsWith('s')) return word + 'es';
   return word + 's';
@@ -138,14 +146,81 @@ function pruneEmptyBranches(node) {
   }
 }
 
+// Keyword Analysis
+function analyzeTitleKeywords(rows) {
+  const keywordsByTypeGenre = new Map(); // "Type|Genre" → Map(word → {count, hours})
+  const stopWords = ['the', 'a', 'an', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'is', 'are', 'was', 'were', 'be', 'been', 'has', 'have', 'had', 'with', 'from', 'by', 'this', 'that', 'will', 'who', 'what', 'when', 'where', 'how', 'their', 'into', 'out', 'about', 'after', 'his', 'her', 'she', 'they', 'them', 'series', 'movie', 'season', 'limited'];
+  
+  rows.forEach(row => {
+    const key = `${row.Type}|${row.PrimaryGenre}`; // Separate by type and genre
+    
+    // Use summary for TV shows, title for movies
+    let text = '';
+    if (row.Type === 'TV' && row.Summary) {
+      // Remove HTML tags from summary
+      text = row.Summary.replace(/<[^>]*>/g, ' ').toLowerCase();
+    } else if (row.Type === 'Movie' && row.Title) {
+      text = row.Title.toLowerCase();
+    }
+    
+    if (!text) return;
+    
+    // Split and filter words
+    const words = text
+      .split(/[\s\-:.,;!?'"()\[\]]+/)
+      .map(w => w.replace(/[^\w]/g, ''))
+      .filter(w => w.length > 3 && !stopWords.includes(w));
+    
+    if (!keywordsByTypeGenre.has(key)) {
+      keywordsByTypeGenre.set(key, new Map());
+    }
+    
+    const keywords = keywordsByTypeGenre.get(key);
+    words.forEach(word => {
+      const data = keywords.get(word) || { count: 0, totalHours: 0 };
+      data.count++;
+      data.totalHours += row.Value;
+      keywords.set(word, data);
+    });
+  });
+  
+  return keywordsByTypeGenre;
+}
+
+function getTopKeywords(node, keywordData, limit = 3) {
+  if (!keywordData || (node.depth !== 2 && node.depth !== 3)) return null;
+  
+  // Extract type and genre based on depth
+  const type = node.depth === 2 ? node.parent.data.name : node.parent.parent.data.name;
+  const genre = node.depth === 2 ? node.data.name : node.parent.data.name;
+  const key = `${type}|${genre}`;
+  
+  if (!keywordData.has(key)) return null;
+  
+  return Array.from(keywordData.get(key).entries())
+    .map(([word, data]) => ({ word, ...data }))
+    .sort((a, b) => b.totalHours - a.totalHours)
+    .slice(0, limit)
+    .map(k => k.word);
+}
+
 // Main Init
 async function init() {
   const datasets = await Promise.all(CONFIG.files.map(async f => {
     const rows = await d3.csv(f.path);
-    return rows.map(r => normalizeRow(r, f.type));
+    return rows.map(r => {
+      const normalized = normalizeRow(r, f.type);
+      // Preserve title and summary for keyword analysis
+      normalized.Title = r.Title || r.primaryTitle || r.originalTitle || '';
+      normalized.Summary = r.summary || ''; // TV shows have summaries
+      return normalized;
+    });
   }));
   const allRows = datasets.flat();
   const expandedRows = SPLIT_MULTI_GENRES ? allRows.flatMap(r => r.Genres.map(g => ({ ...r, PrimaryGenre: g }))) : allRows;
+  
+  // Analyze keywords from titles
+  keywordData = analyzeTitleKeywords(expandedRows);
   const aggMap = aggregateLeafTuples(expandedRows);
   const sequences = tuplesToSequences(aggMap);
   const root = buildHierarchy(sequences);
@@ -202,17 +277,41 @@ function setupColorScales(root) {
 }
 
 function createArcs(radius) {
-  const minArcWidth = 2;
-  const arc = d3.arc().startAngle(d => d.x0).endAngle(d => d.x1).padAngle(1 / radius).padRadius(radius)
-    .innerRadius(d => Math.sqrt(d.y0)).outerRadius(d => Math.max(Math.sqrt(d.y0) + minArcWidth, Math.sqrt(d.y1) - 1));
-  const mousearc = d3.arc().startAngle(d => d.x0).endAngle(d => d.x1).innerRadius(d => Math.sqrt(d.y0)).outerRadius(radius);
+  const arc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .padAngle(1 / radius)
+    .padRadius(radius)
+    .innerRadius(d => Math.sqrt(d.y0))
+    .outerRadius(d => Math.max(Math.sqrt(d.y0) + MIN_ARC_WIDTH, Math.sqrt(d.y1) - 1));
+  
+  const mousearc = d3.arc()
+    .startAngle(d => d.x0)
+    .endAngle(d => d.x1)
+    .innerRadius(d => Math.sqrt(d.y0))
+    .outerRadius(radius);
+  
   return { arc, mousearc };
 }
 
 function setupCenterLabel(svg) {
-  const centerLabel = svg.append("g").attr("class", "center-label");
-  centerLabel.append("text").attr("class", "center-pct").attr("text-anchor", "middle").attr("y", -8).attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif").text("");
-  centerLabel.append("text").attr("class", "center-desc").attr("text-anchor", "middle").attr("y", 20).attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif").text("");
+  const centerLabel = svg.append("g")
+    .attr("class", "center-label");
+  
+  centerLabel.append("text")
+    .attr("class", "center-pct")
+    .attr("text-anchor", "middle")
+    .attr("y", -8)
+    .attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif")
+    .text("");
+  
+  centerLabel.append("text")
+    .attr("class", "center-desc")
+    .attr("text-anchor", "middle")
+    .attr("y", 20)
+    .attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif")
+    .text("");
+  
   return centerLabel;
 }
 
@@ -225,10 +324,22 @@ function setupBreadcrumb() {
 }
 
 function renderNodes(svg, root, arc, mousearc) {
-  const nodes = svg.append("g").selectAll("path").data(root.descendants().filter(d => d.depth)).join("path")
-    .attr("fill", d => colorForNode(d)).attr("fill-opacity", 1.0).attr("d", arc);
-  const mouseLayer = svg.append("g").selectAll("path").data(root.descendants().filter(d => d.depth)).join("path")
-    .attr("fill", "none").attr("pointer-events", "all").attr("d", mousearc);
+  const nodes = svg.append("g")
+    .selectAll("path")
+    .data(root.descendants().filter(d => d.depth))
+    .join("path")
+    .attr("fill", d => colorForNode(d))
+    .attr("fill-opacity", 1.0)
+    .attr("d", arc);
+  
+  const mouseLayer = svg.append("g")
+    .selectAll("path")
+    .data(root.descendants().filter(d => d.depth))
+    .join("path")
+    .attr("fill", "none")
+    .attr("pointer-events", "all")
+    .attr("d", mousearc);
+  
   return { nodes, mouseLayer };
 }
 
@@ -237,6 +348,7 @@ function setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcr
     .on("mouseenter", function(event, d) {
       nodes.attr("fill-opacity", n => d.ancestors().includes(n) ? 1.0 : 0.3);
       d3.select("#title-overlay").style("opacity", 0);
+      breadcrumb.classed("show", true);
       const pct = (100 * d.value / root.value).toFixed(1);
       centerLabel.select('.center-pct').text(`${pct}%`);
       const desc = formatCenterDesc(d, root, VALUE_MODE);
@@ -246,15 +358,29 @@ function setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcr
       const splitPhrase = VALUE_MODE === 'hours' ? ' went to ' : ' came from ';
       const parts = desc.split(splitPhrase);
       if (parts.length > 1) {
-        descEl.append('tspan').text(parts[0] + splitPhrase).attr('x', 0).attr('dy', 0);
-        descEl.append('tspan').text(parts[1]).attr('x', 0).attr('dy', '1.2em');
+        descEl.append('tspan')
+          .text(parts[0] + splitPhrase)
+          .attr('x', 0)
+          .attr('dy', 0);
+        descEl.append('tspan')
+          .text(parts[1])
+          .attr('x', 0)
+          .attr('dy', LINE_SPACING);
       } else {
         descEl.text(desc);
       }
       updateBreadcrumb(d, breadcrumb, root);
       const valueLabel = VALUE_MODE === "hours" ? "Watch Time" : "View Count";
+      
+      // Build tooltip content with keywords
+      let tooltipContent = `${valueLabel}: ${formatValue(d.value)}`;
+      const keywords = getTopKeywords(d, keywordData, 3);
+      if (keywords && keywords.length > 0) {
+        tooltipContent += `<br><span style="font-size: 12px; opacity: 0.9;">Top words: ${keywords.join(', ')}</span>`;
+      }
+      
       let left = event.pageX + 5, top = event.pageY + 5;
-      tooltip.classed("show", true).style("left", `${left}px`).style("top", `${top}px`).html(`${valueLabel}: ${formatValue(d.value)}`);
+      tooltip.classed("show", true).style("left", `${left}px`).style("top", `${top}px`).html(tooltipContent);
       // Adjust position...
       const tooltipNode = tooltip.node();
       if (tooltipNode) {
@@ -268,17 +394,13 @@ function setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcr
     .on("mouseleave", function(event, d) {
       nodes.attr("fill-opacity", 1.0);
       d3.select("#title-overlay").style("opacity", 1);
+      breadcrumb.classed("show", false);
       centerLabel.select('.center-pct').text('100%');
       const descEl = centerLabel.select('.center-desc');
-      if (VALUE_MODE === 'hours') {
-        descEl.selectAll('tspan').remove();
-        descEl.text("");
-        descEl.text(`${formatValue(root.value).replace('B', ' billion')} hours were spent on Netflix.`);
-      } else {
-        descEl.selectAll('tspan').remove();
-        descEl.text("");
-        descEl.text(`${formatValue(root.value).replace('B', ' billion')} streams were logged on Netflix.`);
-      }
+      descEl.selectAll('tspan').remove();
+      descEl.text("");
+      const unit = VALUE_MODE === 'hours' ? 'hours were spent' : 'streams were logged';
+      descEl.text(`${formatValue(root.value).replace('B', ' billion')} ${unit} on Netflix.`);
       breadcrumb.html("");
       tooltip.classed("show", false);
     });
@@ -288,16 +410,47 @@ function updateBreadcrumb(d, breadcrumb, root) {
   const sequence = d.ancestors().reverse().slice(1).filter(n => n.data.name !== 'end').map(n => n.data.name);
   const percentage = (100 * d.value / root.value).toFixed(1);
   breadcrumb.selectAll("*").remove();
-  const svgBread = breadcrumb.append("svg").attr("width", 800).attr("height", 40);
+  
+  // Dimensions for better readability
+  const svgBread = breadcrumb.append("svg")
+    .attr("width", 1000)
+    .attr("height", 45);
+  
   let xOffset = 0;
   sequence.forEach((step, i) => {
     const displayStep = step === 'sci-fi' ? 'Sci-Fi' : step;
     const textContent = i === sequence.length - 1 ? `${displayStep} (${percentage}%)` : displayStep;
-    const width = textContent.length * 6 + 20, height = 30;
-    const points = [[xOffset, 0], [xOffset + width - 10, 0], [xOffset + width, height / 2], [xOffset + width - 10, height], [xOffset, height]];
+    
+    // Width calculation and height
+    const width = textContent.length * 7.5 + 24;
+    const height = 34;
+    
+    const points = [
+      [xOffset, 0], 
+      [xOffset + width - 10, 0], 
+      [xOffset + width, height / 2], 
+      [xOffset + width - 10, height], 
+      [xOffset, height]
+    ];
+    
     let fillColor = i === 0 ? typeScale(step) : i === 1 ? genreScale(step) : languageScale(step);
-    svgBread.append("polygon").attr("points", points.map(p => p.join(",")).join(" ")).attr("fill", fillColor).attr("stroke", "#fff").attr("stroke-width", 1);
-    svgBread.append("text").attr("x", xOffset + width / 2).attr("y", height / 2 + 5).attr("text-anchor", "middle").attr("fill", "#fff").attr("font-size", 12).text(textContent);
+    
+    svgBread.append("polygon")
+      .attr("points", points.map(p => p.join(",")).join(" "))
+      .attr("fill", fillColor)
+      .attr("stroke", "#fff")
+      .attr("stroke-width", 2);
+    
+    svgBread.append("text")
+      .attr("x", xOffset + width / 2)
+      .attr("y", height / 2 + 5)
+      .attr("text-anchor", "middle")
+      .attr("fill", "#fff")
+      .attr("font-size", 14)
+      .attr("font-weight", 400)
+      .attr("letter-spacing", "0.3px")
+      .text(textContent);
+    
     xOffset += width - 5;
   });
 }
@@ -305,10 +458,13 @@ function updateBreadcrumb(d, breadcrumb, root) {
 function renderSunburst(data) {
   const container = d3.select("#chart");
   container.selectAll("*").remove();
-  const size = Math.min(window.innerWidth, window.innerHeight) * 0.9;
+  const size = Math.min(window.innerWidth, window.innerHeight) * CHART_SIZE_RATIO;
   const radius = size / 2;
-  const svg = container.append("svg").style("display", "block").style("margin", "auto")
-    .append("g").attr("transform", `translate(${size/2},${size/2})`);
+  const svg = container.append("svg")
+    .style("display", "block")
+    .style("margin", "auto")
+    .append("g")
+    .attr("transform", `translate(${size/2},${size/2})`);
 
   const root = createPartitionAndRoot(data, radius);
   setupColorScales(root);
@@ -322,37 +478,65 @@ function renderSunburst(data) {
 }
 
 // Helpers
+function formatChildrenCategory(type, language = null) {
+  // Special formatting for "children" genre to use apostrophe (children's)
+  const formattedType = formatType(type);
+  if (formattedType === 'TV') {
+    return language ? `${language} children's TV` : "children's TV";
+  }
+  if (formattedType === 'Movie') {
+    return language ? `${language} children's movies` : "children's movies";
+  }
+  return null; // Not TV or Movie, handle elsewhere
+}
+
 function formatCenterDesc(d, root, VALUE_MODE) {
   const path = d.ancestors().reverse().slice(1).filter(n => n.data.name !== 'end');
-  let type = path[0]?.data.name, genre = path[1]?.data.name, language = path[2]?.data.name;
+  const [type, genre, language] = [path[0]?.data.name, path[1]?.data.name, path[2]?.data.name];
   const phrase = VALUE_MODE === 'hours' ? 'of all viewing time went to ' : 'of all streams came from ';
-  const genreLower = genre ? genre.toLowerCase() : '';
+  const genreLower = genre?.toLowerCase() || '';
+  const fmt = formatType(type);
+  
+  // Helper to build category string
+  const buildCat = (lang, genreText, typeText) => {
+    const parts = [lang, genreText, typeText].filter(Boolean);
+    return parts.join(' ');
+  };
+  
   let cat = '';
-  if (type && genre && language) {
-    if (genreLower === 'children') {
-      if (formatType(type) === 'TV') cat = `${language} children's TV`;
-      else if (formatType(type) === 'Movie') cat = `${language} children's movies`;
-      else cat = `${language} ${genreLower} ${pluralize(formatType(type))}`;
-    } else {
-      if (formatType(type) === 'TV') cat = `${language} TV ${pluralize(genreLower)}`;
-      else if (formatType(type) === 'Movie') cat = `${language} ${genreLower} movies`;
-      else cat = `${language} ${genreLower} ${pluralize(formatType(type))}`;
-    }
-  } else if (type && genre) {
-    if (formatType(type) === 'TV') cat = `TV ${pluralize(genreLower)}`;
-    else if (formatType(type) === 'Movie') cat = `${genreLower} movies`;
-    else cat = `${genreLower} ${pluralize(formatType(type))}`;
-  } else if (type && language) {
-    if (formatType(type) === 'TV') cat = `${language} TV shows`;
-    else if (formatType(type) === 'Movie') cat = `${language} movies`;
-    else cat = `${language} ${pluralize(formatType(type))}`;
-  } else if (type) {
-    if (formatType(type) === 'TV') cat = 'TV shows';
-    else if (formatType(type) === 'Movie') cat = 'movies';
-    else cat = pluralize(formatType(type));
-  } else if (genre) cat = pluralize(genreLower);
+  
+  // Check for special "children" genre first
+  if (genreLower === 'children') {
+    cat = formatChildrenCategory(type, language) || buildCat(language, genreLower, pluralize(fmt));
+  }
+  // Type + Genre + Language
+  else if (type && genre && language) {
+    cat = fmt === 'TV' ? buildCat(language, 'TV', pluralize(genreLower)) :
+          fmt === 'Movie' ? buildCat(language, genreLower, 'movies') :
+          buildCat(language, genreLower, pluralize(fmt));
+  }
+  // Type + Genre (no language)
+  else if (type && genre) {
+    cat = fmt === 'TV' ? buildCat(null, 'TV', pluralize(genreLower)) :
+          fmt === 'Movie' ? buildCat(null, genreLower, 'movies') :
+          buildCat(null, genreLower, pluralize(fmt));
+  }
+  // Type + Language (no genre)
+  else if (type && language) {
+    cat = fmt === 'TV' ? `${language} TV shows` :
+          fmt === 'Movie' ? `${language} movies` :
+          `${language} ${pluralize(fmt)}`;
+  }
+  // Only type, genre, or language
+  else if (type) cat = fmt === 'TV' ? 'TV shows' : fmt === 'Movie' ? 'movies' : pluralize(fmt);
+  else if (genre) cat = pluralize(genreLower);
   else if (language) cat = `${language} titles`;
-  return phrase + (cat.charAt(0) === cat.charAt(0).toLowerCase() ? cat : cat.charAt(0).toUpperCase() + cat.slice(1)) + '.';
+  
+  // Capitalize first letter if needed
+  const result = cat.charAt(0) === cat.charAt(0).toLowerCase() ? 
+    cat.charAt(0).toUpperCase() + cat.slice(1) : cat;
+  
+  return phrase + result + '.';
 }
 
 function formatTotalLine(root, VALUE_MODE) {
@@ -373,7 +557,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('resize', () => {
     if (!window.__netflixSunburstRoot) return;
     if (_resizeTimer) clearTimeout(_resizeTimer);
-    _resizeTimer = setTimeout(() => renderSunburst(window.__netflixSunburstRoot), 250);
+    _resizeTimer = setTimeout(() => renderSunburst(window.__netflixSunburstRoot), RESIZE_DEBOUNCE_MS);
   });
 }
 
