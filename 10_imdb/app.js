@@ -1,7 +1,7 @@
 // Netflix Titles by Country using TMDB API
 // Fetches production countries for Netflix movies and TV shows using IMDb IDs
 
-const TMDB_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI4MjQ1Mjc5YTdjN2RhM2VjMGY4MzBiOTEwZTliMzE5NiIsIm5iZiI6MTc1OTc4MTg0NS4wNSwic3ViIjoiNjhlNDIzZDU5NzU3NDBhYzVhNjE4MDhjIiwic2NvcGVzIjpbImFwaV9yZWFkIl0sInZlcnNpb24iOjF9.zXJwAtDkUu-NRq8syOxV7W8hePAWvLI2rulJJcr4d2o"
+const TMDB_TOKEN = "YOUR_TMDB_API_TOKEN_HERE"
 
 // Load Netflix datasets
 const moviesData = await d3.csv('./data/NetflixMovies_added.csv')

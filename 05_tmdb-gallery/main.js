@@ -2,7 +2,7 @@
 // TMDB API example: Search for "Jack Reacher" and display results as an image gallery
 // Docs: https://developer.themoviedb.org/reference/search
 
-const token = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI4MjQ1Mjc5YTdjN2RhM2VjMGY4MzBiOTEwZTliMzE5NiIsIm5iZiI6MTc1OTc4MTg0NS4wNSwic3ViIjoiNjhlNDIzZDU5NzU3NDBhYzVhNjE4MDhjIiwic2NvcGVzIjpbImFwaV9yZWFkIl0sInZlcnNpb24iOjF9.zXJwAtDkUu-NRq8syOxV7W8hePAWvLI2rulJJcr4d2o";
+const token = "YOUR_TMDB_API_TOKEN_HERE";
 const query = "Jack Reacher";
 const url = `https://api.themoviedb.org/3/search/movie?query=${encodeURIComponent(query)}&include_adult=false&language=en-US&page=1`;
 const options = {
