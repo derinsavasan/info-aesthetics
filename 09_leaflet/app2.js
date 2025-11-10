@@ -27,10 +27,13 @@ const population = d3.rollup(
     d => d.countryiso3code
 )
 
-// Calculate population range for color scale
-const maxPop = d3.max(population.values())
-const medianPop = d3.median(population.values())
-const minPop = d3.min(population.values())
+// Calculate population range for color scale using quintiles (5 bins)
+const popValues = Array.from(population.values()).sort((a, b) => a - b)
+const minPop = popValues[0]
+const q20 = d3.quantile(popValues, 0.20)  // 20th percentile
+const q40 = d3.quantile(popValues, 0.40)  // 40th percentile
+const q60 = d3.quantile(popValues, 0.60)  // 60th percentile
+const q80 = d3.quantile(popValues, 0.80)  // 80th percentile
 
 // Add NASA Blue Marble tile layer
 L.tileLayer(
@@ -41,11 +44,12 @@ L.tileLayer(
     }
 ).addTo(map)
 
-// Color scale: green (low) → white (median) → purple (high)
+// Color scale: 5 bins with quintile boundaries
+// Bin 1: minPop→q20, Bin 2: q20→q40, Bin 3: q40→q60, Bin 4: q60→q80, Bin 5: q80+
 const color_scale = d3
     .scaleLinear()
-    .domain([minPop, medianPop, maxPop])
-    .range(['green', 'white', 'purple'])
+    .domain([minPop, q20, q40, q60, q80])
+    .range(['green', 'lightyellow', 'orange', 'plum', 'purple'])
 
 // Add countries as GeoJSON layer with population-based colors
 const geo_layer = L.geoJSON(geojson, {
