@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaflet Map</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+        integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+        crossorigin="" />
+
+    <style>
+        /* Map container height */
+        #map { height: 500px; }
+
+        /* Fix tile rendering gaps */
+        .leaflet-tile-container img {
+            width: 256.5px !important;
+            height: 256.5px !important;
+        }
+        
+        /* Transparent map background */
+        .leaflet-container {
+            background: transparent;
+        }
+
+        /* Popup text styling */
+        .leaflet-popup-content {
+            font-size: 1.5rem;
+            font-weight: 800;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Libraries -->
+    <script src="https://unpkg.com/d3"></script>
+    <script src="https://unpkg.com/@turf/turf@5.1.6"></script>
+    <script src="https://unpkg.com/leaflet"></script>
+    
+    <!-- App scripts (ES module for top-level await) - comment/uncomment to switch -->
+    <!-- <script type="module" src="./app.js"></script> -->
+    <script type="module" src="./app2.js"></script>
+</body>
+</html>
