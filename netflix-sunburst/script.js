@@ -267,18 +267,47 @@ async function init() {
 // Controls
 function setupControls() {
   const filterExplanation = document.getElementById('filter-explanation');
-  if (filterExplanation) filterExplanation.innerHTML = 'Use the toggle to switch between what people committed time to and what they were curious enough to try.';
+  const viewToggle = document.getElementById('view-toggle');
+  if (!viewToggle) return;
+
+  const buttons = Array.from(viewToggle.querySelectorAll('button'));
+  const pill = viewToggle.querySelector('.toggle-pill');
   const explanations = {
     hours: 'Measures the total amount of time viewers spent watching a title. Calculated in total hours viewed across all viewers.',
-    views: 'Counts how many times a title was started. Each press of “play” counts as one view, no matter how long someone watched it for.'
+    views: 'Counts how many times a title was started. Each press of “play” counts as one view, no matter how long someone watched it for.',
+    matrix: 'Matrix view is coming soon.'
   };
-  d3.selectAll('input[name="valueMode"]').on("change", function() {
-    VALUE_MODE = this.value;
-    if (filterExplanation) filterExplanation.innerHTML = explanations[VALUE_MODE] || '';
-    init();
-  }).on("click", function() {
-    if (filterExplanation) filterExplanation.innerHTML = explanations[this.value] || '';
+
+  const setActive = (view) => {
+    buttons.forEach((btn, idx) => {
+      const isActive = btn.dataset.view === view;
+      btn.classList.toggle('active', isActive);
+      if (isActive && pill) {
+        const position = idx === 0 ? '3px' : idx === 1 ? 'calc(33.333% + 3px)' : 'calc(66.666% + 3px)';
+        pill.style.left = position;
+      }
+    });
+    if (filterExplanation) filterExplanation.innerHTML = explanations[view] || '';
+  };
+
+  buttons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.view;
+      if (view === 'matrix') {
+        setActive(view);
+        return;
+      }
+      if (view !== VALUE_MODE) {
+        VALUE_MODE = view;
+        setActive(view);
+        init();
+      } else {
+        setActive(view);
+      }
+    });
   });
+
+  setActive(VALUE_MODE);
 }
 
 // Rendering
@@ -330,14 +359,14 @@ function setupCenterLabel(svg) {
     .attr("class", "center-pct")
     .attr("text-anchor", "middle")
     .attr("y", -8)
-    .attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif")
+    .attr("font-family", "'Schibsted Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif")
     .text("");
   
   centerLabel.append("text")
     .attr("class", "center-desc")
     .attr("text-anchor", "middle")
     .attr("y", 20)
-    .attr("font-family", "'Helvetica Neue', Helvetica, Arial, sans-serif")
+    .attr("font-family", "'Schibsted Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif")
     .text("");
   
   return centerLabel;
@@ -423,12 +452,7 @@ function setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcr
       nodes.attr("fill-opacity", 1.0);
       d3.select("#title-overlay").style("opacity", 1);
       breadcrumb.classed("show", false);
-      centerLabel.select('.center-pct').text('100%');
-      const descEl = centerLabel.select('.center-desc');
-      descEl.selectAll('tspan').remove();
-      descEl.text("");
-      const unit = VALUE_MODE === 'hours' ? 'hours were spent' : 'streams were logged';
-      descEl.text(`${formatValue(root.value).replace('B', ' billion')} ${unit} on Netflix.`);
+      setCenterIdle(centerLabel, root);
       breadcrumb.html("");
       tooltip.classed("show", false);
     });
@@ -502,6 +526,7 @@ function renderSunburst(data) {
   const breadcrumb = setupBreadcrumb();
   const { nodes, mouseLayer } = renderNodes(svg, root, arc, mousearc);
   setupMouseEvents(mouseLayer, nodes, root, centerLabel, tooltip, breadcrumb, VALUE_MODE);
+  setCenterIdle(centerLabel, root);
   centerLabel.raise();
 }
 
@@ -567,6 +592,16 @@ function formatCenterDesc(d, root, VALUE_MODE) {
 function formatTotalLine(root, VALUE_MODE) {
   const total = formatValue(root.value);
   return VALUE_MODE === 'hours' ? `100% of total watch time: ${total}` : `100% of total view count: ${total}`;
+}
+
+function setCenterIdle(centerLabel, root) {
+  const descEl = centerLabel.select('.center-desc');
+  centerLabel.select('.center-pct').text('100%');
+  descEl.selectAll('tspan').remove();
+  descEl.text("");
+  const totalText = formatValue(root.value).replace('B', ' billion');
+  const unit = VALUE_MODE === 'hours' ? 'hours were spent on Netflix.' : 'streams were logged on Netflix.';
+  descEl.text(`${totalText} ${unit}`);
 }
 
 function colorForNode(d) {
